@@ -1,0 +1,317 @@
+---
+title: "Heart Disease Prediction"
+author: "Tarek Elkady"
+date: "2/22/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction/Overview
+
+AS per Centers for Disease Control and Prevention (CDC), Coronary artery disease (CAD) is the most common type of heart disease in the United States. It is one of the main leading causes of death in US and the world.  
+In this project, we will try to find the best machine learning model that can predict the presence of CAD using available patients data.  
+We will use (Heart Disease UCI) data set from kaggle downloaded from this link 
+
+https://www.kaggle.com/ronitf/heart-disease-uci/download  
+
+The data is provided by Cleveland Clinic and contains 14 features related to 303 patients.
+
+## Description of the data set features
+
+* age: age in years  
+* sex: sex (1 = male; 0 = female)  
+* cp: chest pain type  
+     Value 1: typical angina  
+     Value 2: atypical angina  
+     Value 3: non-anginal pain  
+* trestbps: resting blood pressure (in mm Hg on admission to the hospital)  
+* chol: serum cholesterol in mg/dl  
+* fbs: (fasting blood sugar > 120 mg/dl) (1 = true; 0 = false)  
+* restecg: resting electrocardiographic results  
+         Value 0: normal  
+         Value 1: having ST-T wave abnormality (T wave inversions and/or ST elevation or      depression of > 0.05 mV)  
+         Value 2: showing probable or definite left ventricular hypertrophy by Estes' criteria 
+* thalach: maximum heart rate achieved  
+* exang: exercise induced angina (1 = yes; 0 = no)  
+* oldpeak = ST depression induced by exercise relative to rest  
+* slope: the slope of the peak exercise ST segment  
+        Value 1: upsloping  
+        Value 2: flat  
+        Value 3: downsloping  
+* ca: number of major vessels (0-3) colored by flourosopy  
+* thal: 1 = normal; 1 = fixed heart defect; 3 = reversable heart defect  
+* target: diagnosis of heart disease (angiographic disease status)  
+         Value 0: < 50% diameter narrowing  
+         Value 1: > 50% diameter narrowing  
+
+The target feature is the feature that we will try to predict in this project.  
+
+## Summary of the project
+
+The aim of the project is to find the best machine learning model that predicts the presence of CAD (target = 1) with overall accuracy > 85% and returns the highest F1 score.  
+F1 score is the harmonic average of specificity (Precision) and sensitivity (recall) and it is calculated using the following equation  
+$$ 2 \times \frac{\mbox{precision} \cdot \mbox{recall}} {\mbox{precision} + \mbox{recall}} $$
+The following models will be used:  
+* Logistic Regression  
+* Linear Discriminant Analysis  
+* Quadratic Discriminant Analysis  
+* K-Nearest Neighbors  
+* Random Forest  
+
+# Methods/Analysis
+
+We will start by loading the heart data and the needed packages
+
+```{r, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(caret)
+#Loading data
+heart_data <- read.csv('heart.csv')
+```
+
+## Data Exploration
+
+```{r}
+dim(heart_data)
+```
+
+The data set contains 303 observations and 14 variables.  
+
+The following code will return the data structure.
+
+```{r}
+str(heart_data)
+```
+Before continuing our analysis, we want to make sure that our data set does not contain missing values.
+
+```{r}
+sum(is.na(heart_data) == TRUE)
+```
+
+There are no missing values in the data set.
+
+## Data Visualization
+
+Now we will explore our data visually to examine the relationship between the different variables and the target variable (Patient has CAD = 1 or Patient does not have CAD = 0)
+
+### The relationship between age and presence of CAD
+
+```{r, echo=FALSE}
+heart_data %>% ggplot(aes(target,age))+
+  geom_boxplot(aes(fill= as.factor(target)),outlier.colour="blue",alpha=1/4)
+```
+
+### The relationship between resting blood pressure and presence of CAD
+
+```{r, echo=FALSE}
+heart_data %>% ggplot(aes(target,trestbps))+
+  geom_boxplot(aes(fill= as.factor(target)),outlier.colour="blue",alpha=1/4)
+```
+
+### The relationship between serum cholesterol and presence of CAD
+
+```{r, echo=FALSE}
+heart_data %>% ggplot(aes(target,chol))+
+  geom_boxplot(aes(fill= as.factor(target)),outlier.colour="blue",alpha=1/4)
+```
+
+### The relationship between maximum heart rate and presence of CAD
+
+```{r, echo=FALSE}
+heart_data %>% ggplot(aes(target,thalach))+
+  geom_boxplot(aes(fill= as.factor(target)),outlier.colour="blue",alpha=1/4)
+```
+
+From above plots we can find that the effects of these variables are not significant in determining the possibility of having CAD.
+
+Now we will explore more relationships in the data set.
+
+### The relationship between patient's sex and presence of CAD
+
+```{r, echo=FALSE}
+heart_data %>% ggplot(aes(sex)) + 
+  geom_bar(mapping = aes(x=as.factor(sex),fill=as.factor(sex))) +
+  facet_wrap(.~target)
+```
+
+The relationship here is not significant because the data set contains data for male patients more than females.
+
+```{r}
+table(heart_data$sex)
+```
+
+Number of male patients is almost double the number of females.
+
+### The relationship between chest pain type and presence of CAD
+
+```{r, echo=FALSE}
+heart_data %>% ggplot(aes(cp)) + 
+  geom_bar(mapping = aes(x=as.factor(cp),fill=as.factor(cp))) +
+  facet_wrap(.~target)
+```
+This plot is showing a significant relationship between chest pain and presence of CAD.
+
+### The relationship between slope of the peak exercise ST segment and presence of CAD
+
+```{r, echo=FALSE}
+heart_data %>% ggplot(aes(slope)) + 
+  geom_bar(mapping = aes(x=as.factor(slope),fill=as.factor(slope))) +
+  facet_wrap(.~target)
+```
+
+### The relationship between resting electrocardiographic results and presence of CAD
+
+```{r, echo=FALSE}
+heart_data %>% ggplot(aes(restecg)) + 
+  geom_bar(mapping = aes(x=as.factor(restecg),fill=as.factor(restecg))) +
+  facet_wrap(.~target)
+```
+
+### The relationship between having a heart defect and presence of CAD
+
+```{r, echo=FALSE}
+heart_data %>% ggplot(aes(thal)) + 
+  geom_bar(mapping = aes(x=as.factor(thal),fill=as.factor(thal))) +
+  facet_wrap(.~target)
+```
+Also this plot is showing a significant relationship between having fixed heart defect and presence of CAD.
+
+## Creating test and train data sets
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(10,sample.kind = "Rounding")
+test_index <- createDataPartition(heart_data$target ,times = 1, p=.3,list = FALSE)
+train_heart <- heart_data[-test_index, ]
+test_heart <- heart_data[test_index, ]
+```
+
+## Setting cross validation parameters
+
+```{r}
+control <- trainControl(method = "cv", number = 10, p = .9)
+```
+
+After creating test and train data sets from heart data set and setting the cross validation parameters, we will start applying different machine learning models to our data and add the results of total accuracy and F1 score of each model to a results table.
+
+## Model 1 - Logistic regression
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(10, sample.kind="Rounding")
+train_glm <- train(as.factor(target) ~ ., method = "glm", 
+                   data = train_heart,family = "binomial",
+                   trControl = control) 
+glm_pred <- predict(train_glm, test_heart)
+
+logistic_regression <- confusionMatrix(glm_pred, as.factor(test_heart$target), 
+                                       mode = "everything",
+                                       positive = "1")
+logistic_regression
+
+results <- tibble(Model = "logistic_regression", 
+                  Accuracy = logistic_regression$overall["Accuracy"], 
+                  F1 = logistic_regression$byClass["F1"])
+results %>% knitr::kable()
+```
+
+## Model 2 - K-nearest neighbors
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(10, sample.kind="Rounding")
+train_knn <- train(as.factor(target) ~ ., method = "knn", 
+                   data = train_heart,
+                   tuneGrid = data.frame(k = seq(2, 200, 2)),
+                   trControl = control)
+#Find best tune
+ggplot(train_knn, highlight = TRUE)
+train_knn$bestTune
+knn_pred <- predict(train_knn, test_heart)
+
+knn <- confusionMatrix(knn_pred, as.factor(test_heart$target), 
+                       mode = "everything",
+                       positive = "1")
+knn
+
+results <- bind_rows(results,
+                     data_frame(Model = "K-nearest neighbors", 
+                                Accuracy = knn$overall["Accuracy"], 
+                                F1 = knn$byClass["F1"]))
+results %>% knitr::kable()
+
+```
+
+## Model 3 - Linear discriminant analysis
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(10, sample.kind="Rounding")
+train_lda <- train(as.factor(target) ~ ., method = "lda", data = train_heart,
+                   trControl = control)
+lda_pred <- predict(train_lda, test_heart)
+
+lda <- confusionMatrix(lda_pred, as.factor(test_heart$target), 
+                       mode = "everything",
+                       positive = "1")
+lda
+
+results <- bind_rows(results,
+                     data_frame(Model = "Linear discriminant analysis", 
+                                Accuracy = lda$overall["Accuracy"], 
+                                F1 = lda$byClass["F1"]))
+results %>% knitr::kable()
+```
+
+## Model 4 - Quadratic discriminant analysis
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(10, sample.kind="Rounding")
+train_qda <- train(as.factor(target) ~ ., method = "qda", data = train_heart,
+                   trControl = control)
+qda_pred <- predict(train_qda, test_heart)
+
+qda <- confusionMatrix(qda_pred, as.factor(test_heart$target), 
+                       mode = "everything",
+                       positive = "1")
+qda
+
+results <- bind_rows(results,
+                     data_frame(Model = "Quadratic discriminant analysis", 
+                                Accuracy = qda$overall["Accuracy"], 
+                                F1 = qda$byClass["F1"]))
+results %>% knitr::kable()
+```
+## Model 5 - Random Forest
+
+```{r, message=FALSE, warning=FALSE}
+set.seed(10, sample.kind="Rounding")
+train_rf <- train(as.factor(target) ~ ., method = "rf", 
+                  data = train_heart,ntree = 100,
+                  tuneGrid = data.frame(mtry =seq(1,25,2)),
+                  trControl = control,
+                  importance = TRUE)
+ggplot(train_rf)      
+train_rf$bestTune
+rf_pred <- predict(train_rf, test_heart)
+rf <- confusionMatrix(rf_pred, as.factor(test_heart$target), 
+                mode = "everything",
+                positive = "1")
+rf
+
+results <- bind_rows(results,
+                     data_frame(Model = "Random Forest", 
+                                Accuracy = rf$overall["Accuracy"], 
+                                F1 = rf$byClass["F1"]))
+results %>% knitr::kable()
+```
+
+We can explore the most important factors that predict the presence of CAD using the variable importance function
+
+```{r}
+varImp(train_rf)
+```
+# Conclusion
+
+This project involved applying 5 machine learning models to the heart disease data set from University of California Irvine machine learning repository, in order to predict the presence of Coronary Artery Disease (CAD). The aim of the project is to find a model with overall accuracy > 85% and returns the highest F1 score.  
+Two models returned over all accuracy > 85 %, Quadratic discriminant analysis and Random Forest both returned 85.7% accuracy. Random Forest model returned the highest F1 score 88.3. 
+Using the variable importance function in Random Forest, the most important factors to determine the presence of CAD are the presence and type of chest pain, Number of major vessels that are working, and the presence of heart defect. These factors are consistent with our previous analysis that was done using data visualization.
